@@ -15,18 +15,26 @@ from model.enet import ENet_encoder, ENet_decoder, ENet
 from model.icnet import ICNet_1E2D, ICNet
 
 class LaneNet_FCN_Res_1E1D(nn.Module):
+    """ 
+    A LaneNet model made up of FCN, whose backbone is ResNet.
+    1E1D means one encoder and one decoder, that is the embedding and the binary segmentation 
+    share the same encoder and decoder, except the last layer of the decoder.
+    """
 
     def __init__(self):
         super().__init__()
 
+        # comment or uncomment to choose from different encoders and decoders
         self.encoder = resnet18(pretrained=True)
         # self.encoder = resnet34(pretrained=True)
-        self.decoder = decoder_fcn.Decoder_LaneNet_TConv()
-        # self.decoder = decoder_fcn.Decoder_LaneNet_Interplt()
+ 
+        self.decoder = decoder_fcn.Decoder_LaneNet_TConv()  # Decoder with Transposed Conv
+        # self.decoder = decoder_fcn.Decoder_LaneNet_Interplt()  # Decoder with Interpolation
 
     def forward(self, input):
         x = self.encoder.forward(input)
-
+        
+        # store feature maps of the encoder for later fusion in the decoder
         input_tensor_list = [self.encoder.c1, self.encoder.c2, self.encoder.c3, self.encoder.c4, x]
         embedding, logit = self.decoder.forward(input_tensor_list)
 
@@ -34,7 +42,11 @@ class LaneNet_FCN_Res_1E1D(nn.Module):
 
 
 class LaneNet_FCN_Res_1E2D(nn.Module):
-
+    ''' 
+    A LaneNet model made up of FCN, whose backbone is ResNet.
+    1E2D means one encoder and two decoder, that is the embedding and the binary segmentation 
+    share the same encoder, and each owns a independant decoder.
+    '''
     def __init__(self):
         super().__init__()
 
@@ -42,7 +54,6 @@ class LaneNet_FCN_Res_1E2D(nn.Module):
         # self.encoder = resnet34(pretrained=True)
         self.decoder_embed = decoder_fcn.Decoder_LaneNet_TConv_Embed()
         self.decoder_logit = decoder_fcn.Decoder_LaneNet_TConv_Logit()
-        # self.decoder = decoder_fcn.Decoder_LaneNet_Interplt()
 
     def forward(self, input):
         x = self.encoder.forward(input)
@@ -55,7 +66,11 @@ class LaneNet_FCN_Res_1E2D(nn.Module):
 
 
 class LaneNet_ENet_1E2D(nn.Module):
-
+    ''' 
+    A LaneNet model made up of ENet, please refer to 'Efficient Net'yy.
+    1E2D means one encoder and two decoder, that is the embedding and the binary segmentation 
+    share the same encoder, and each owns a independant decoder.
+    '''
     def __init__(self):
         super().__init__()
 
@@ -73,7 +88,11 @@ class LaneNet_ENet_1E2D(nn.Module):
 
 
 class LaneNet_ENet_1E1D(nn.Module):
-
+    ''' 
+    A LaneNet model made up of ENet, please refer to 'Efficient Net'.
+    1E1D means one encoder and one decoder, that is the embedding and the binary segmentation 
+    share the same encoder and decoder, except the last layer of the decoder.
+    '''
     def __init__(self):
         super().__init__()
 
@@ -91,13 +110,23 @@ class LaneNet_ENet_1E1D(nn.Module):
 
 
 class LaneNet_ICNet_1E2D(ICNet_1E2D):
-
+    '''
+    A LaneNet model made up of ENet, please refer to 'Efficient Net'.
+    1E2D means one encoder and two decoder, that is the embedding and the binary segmentation
+    share the same encoder, and each owns a independant decoder.
+    '''
+ 
     def __init__(self):
         super().__init__()
 
 
 class LaneNet_ICNet_1E1D(nn.Module):
-
+    ''' 
+    A LaneNet model made up of ENet, please refer to 'Efficient Net'.
+    1E1D means one encoder and one decoder, that is the embedding and the binary segmentation 
+    share the same encoder and decoder, except the last layer of the decoder.
+    '''
+ 
     def __init__(self):
         super().__init__()
         self.model = ICNet(64)
@@ -118,5 +147,4 @@ if __name__ == '__main__':
     model = LaneNet_ENet_1E2D()
     embedding, logit = model(img)
 
-    print(embedding)
     print(embedding.shape)

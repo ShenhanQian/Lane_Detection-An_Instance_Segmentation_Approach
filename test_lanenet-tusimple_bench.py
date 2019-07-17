@@ -13,8 +13,7 @@ from tensorboardX import SummaryWriter
 
 import model.lanenet as lanenet
 from model.utils import cluster_embed, fit_lanes, sample_from_curve, sample_from_IPMcurve, generate_json_entry, get_color
-# from model.mean_shift import Bin_Mean_Shift
-from dataset import TuSimpleDataset_old, TuSimpleDataset
+from dataset import TuSimpleDataset
 
 
 def init_args():
@@ -37,7 +36,7 @@ if __name__ == '__main__':
     args = init_args()
 
     '''Test config'''
-    batch_size = 1  # 8G: 14       12G: 18     24G:36
+    batch_size = 1
     num_workers = 4
     train_start_time = time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime(time.time()))
     # writer = SummaryWriter(log_dir='summary/lane-detect-%s-%s' % (train_start_time, args.tag))
@@ -47,7 +46,7 @@ if __name__ == '__main__':
         batch_size *= torch.cuda.device_count()
         print("Let's use", torch.cuda.device_count(), "GPUs!")
     else:
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        device = torch.device("cpu")
         print("Let's use CPU")
     print("Batch size: %d" % batch_size)
 
@@ -57,8 +56,8 @@ if __name__ == '__main__':
 
     data_dir = '/root/Projects/lane_detection/dataset/tusimple/test_set'
 
-    # test_set = TuSimpleDataset('/root/Projects/lane_detection/dataset/tusimple/test_set', phase='test')
-    test_set = TuSimpleDataset('/root/Projects/lane_detection/dataset/tusimple/test_set', phase='test_extend')
+    test_set = TuSimpleDataset('/root/Projects/lane_detection/dataset/tusimple/test_set', phase='test')
+    # test_set = TuSimpleDataset('/root/Projects/lane_detection/dataset/tusimple/test_set', phase='test_extend')
     # val_set = TuSimpleDataset('/root/Projects/lane_detection/dataset/tusimple/train_set', phase='val')
 
     num_test = len(test_set)
@@ -75,6 +74,7 @@ if __name__ == '__main__':
 
     _, h, w = test_set[0]['input_tensor'].shape
 
+    # for IPM (Inverse Projective Mapping)
     src = np.float32([[0.35 * (w - 1), 0.34 * (h - 1)], [0.65 * (w - 1), 0.34 * (h - 1)],
                       [0. * (w - 1), h - 1], [1. * (w - 1), h - 1]])
     dst = np.float32([[0. * (w - 1), 0. * (h - 1)], [1.0 * (w - 1), 0. * (h - 1)],
@@ -101,6 +101,7 @@ if __name__ == '__main__':
 
     '''Forward propogation'''
     with torch.no_grad():
+        # uncomment either one below to select a network architecture
         net = lanenet.LaneNet_FCN_Res_1E1D()
         # net = lanenet.LaneNet_FCN_Res_1E2D()
 
@@ -114,17 +115,15 @@ if __name__ == '__main__':
         net.to(device)
         net.eval()
 
-        assert args.ckpt_path is not None, 'Checkpoint loaded.'
+        assert args.ckpt_path is not None, 'Checkpoint Error.'
 
         checkpoint = torch.load(args.ckpt_path)
-        net.load_state_dict(checkpoint['model_state_dict'], strict=True)  # , strict=False
+        net.load_state_dict(checkpoint['model_state_dict'], strict=True)
 
         step = 0
         epoch = 1
-
         print()
 
-        # torch.save(net.state_dict(), '%s_epoch-%d.pth' % (train_start_time, epoch))
         data_iter = {'test': iter(dataloaders['test'])}
         time_run_avg = 0
         time_fp_avg = 0
@@ -161,9 +160,6 @@ if __name__ == '__main__':
             pred_insts = cluster_embed(embeddings, pred_bin_batch, band_width=0.5)
             time_clst = time.time() - time_clst
 
-            # statistics
-            # bin_corrects = torch.sum((preds_bin_expand_batch.detach() == labels_bin_expand_batch.detach()).byte())
-
             '''Curve Fitting'''
             time_fit = time.time()
             for idx in range(batch_size):
@@ -172,7 +168,7 @@ if __name__ == '__main__':
                 pred_inst = pred_insts[idx]
                 path = path_batch[idx]
 
-                '''IPM'''
+                '''Choice 1: Fit Curve after IPM(Inverse Perspective Mapping)'''
                 # pred_inst_IPM = cv2.warpPerspective(pred_inst.cpu().numpy().astype('uint8'), M, (w, h),
                 #                                     flags=cv2.INTER_NEAREST)
                 # pred_inst_IPM = torch.from_numpy(pred_inst_IPM)
@@ -200,17 +196,18 @@ if __name__ == '__main__':
                 #     xy_pred = np.array(xy_pred, dtype=np.int32)
                 #     curves_pts_pred.append(xy_pred)
 
-                '''origin'''
+                '''Choice 2: Directly fit curves on original images'''
                 curves_param = fit_lanes(pred_inst)
                 curves_pts_pred=sample_from_curve(curves_param,pred_inst, y_sample)
 
-                '''visualize'''
+                '''visualization'''
                 curve_sample = np.zeros((h, w, 3), dtype=np.uint8)
                 rgb = (input_rgb.cpu().numpy().transpose(1, 2, 0) * 255 + VGG_MEAN).astype(np.uint8)
                 pred_bin_rgb = pred_bin_batch[idx].repeat(3,1,1).cpu().numpy().transpose(1, 2, 0).astype(np.uint8) * 255
+                
                 # pred_inst_rgb = pred_inst.repeat(3,1,1).cpu().numpy().transpose(1, 2, 0).astype(np.uint8) * 40  # gray
-
                 pred_inst_rgb = pred_inst.repeat(3, 1, 1).cpu().numpy().astype(np.uint8).transpose(1, 2, 0)  # color
+                
                 for i in np.unique(pred_inst_rgb):
                     if i == 0:
                         continue
@@ -225,7 +222,6 @@ if __name__ == '__main__':
                 pred_inst_rgb_fg = cv2.bitwise_and(pred_inst_rgb, pred_inst_rgb, mask=fg_mask)
                 fg_align = cv2.addWeighted(rgb_fg, 0.3, pred_inst_rgb_fg, 0.7, 0)
                 rgb_align = rgb_bg + fg_align
-                # cv2.add()
 
                 # curve_sample_IPM = np.zeros((h, w, 3), dtype=np.uint8)
                 # rgb_IPM = cv2.warpPerspective(rgb, M, (w, h), flags=cv2.INTER_LINEAR)
@@ -291,8 +287,8 @@ if __name__ == '__main__':
 
                 time_run = time.time() - time_run
 
+                # Generate Json file to be evaluated by TuSimple Benchmark official eval script
                 json_entry = generate_json_entry(curves_pts_pred, y_sample, raw_file, (h, w), time_run)
-                # print(json_entry)
                 output_list.append(json_entry)
 
                 time_run_avg = (time_ct * time_run_avg + time_run) / (time_ct + 1)
@@ -301,7 +297,7 @@ if __name__ == '__main__':
                 time_fit_avg = (time_ct * time_fit_avg + time_fit) / (time_ct + 1)
                 time_ct += 1
 
-                if step % 10 == 0:
+                if step % 10 == 0:  # Change the coefficient to filter the value
                 # if step % 2 == 0:
                     time_ct = 0
 
@@ -312,7 +308,7 @@ if __name__ == '__main__':
                               time_run_avg*1000, time_fp_avg * 1000, time_clst_avg * 1000, time_fit_avg * 1000,
                               int(1/(time_run_avg + 1e-9))))
 
-            '''Summary Visualization'''
+            '''Write to Tensorboard Summary'''
             # num_images = 3
             # inputs_images = (input_batch + VGG_MEAN)[:num_images, [2, 1, 0], :, :]  # .byte()
             # writer.add_images('image', inputs_images, step)
@@ -326,9 +322,8 @@ if __name__ == '__main__':
             # # print(torch.min(embedding_img).item(), torch.max(embedding_img).item())
             # writer.add_images('Embedding', embedding_img, step)
 
-            # break
-        # with open(f'output/test_pred-{train_start_time}-{args.tag}.json', 'w') as f:
-        #     for item in output_list:
-        #         json.dump(item, f)  # , indent=4, sort_keys=True
-        #         f.write('\n')
+        with open(f'output/test_pred-{train_start_time}-{args.tag}.json', 'w') as f:
+            for item in output_list:
+                json.dump(item, f)  # , indent=4, sort_keys=True
+                f.write('\n')
 

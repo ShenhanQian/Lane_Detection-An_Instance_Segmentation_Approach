@@ -3,12 +3,10 @@ from torch.utils.data import DataLoader
 import torch.optim as optim
 import torch.nn as nn
 import torch.nn.functional as F
-# from torchvision import transforms
 from model import res_unet
 from model.loss import discriminative_loss
 import model.lanenet as lanenet
 from model.utils import cluster_embed, fit_lanes, sample_from_curve, sample_from_IPMcurve, get_color
-# from model.mean_shift import Bin_Mean_Shift
 import torch
 import time
 # from torch.utils.tensorboard import SummaryWriter
@@ -39,10 +37,10 @@ if __name__ == '__main__':
     args = init_args()
 
     '''Test config'''
-    batch_size = 1  # 8G: 14       12G: 18     24G:36
-    num_steps = 2000000
+    batch_size = 1
+#     num_steps = 2000000
     num_workers = 1
-    train_start_time = time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime(time.time()))
+  #  train_start_time = time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime(time.time()))
     # writer = SummaryWriter(log_dir='summary/lane-detect-%s-%s' % (train_start_time, args.tag))
 
     if torch.cuda.is_available():
@@ -50,7 +48,7 @@ if __name__ == '__main__':
         batch_size *= torch.cuda.device_count()
         print("Let's use", torch.cuda.device_count(), "GPUs!")
     else:
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        device = torch.device("cpu")
         print("Let's use CPU")
     print("Batch size: %d" % batch_size)
 
@@ -58,8 +56,6 @@ if __name__ == '__main__':
     if os.path.exists(output_dir) is False:
         os.makedirs(output_dir)
 
-    # data_dir = r'G:\Dataset\tusimple\training_new'
-    # data_dir = '/root/Projects/lane_detection/dataset/tusimple/train_set/training_new'
     # data_dir = '/root/Projects/lane_detection/dataset/tusimple/train_set/training_thickness_10'
     data_dir = '/root/Projects/lane_detection/dataset/tusimple/train_set/training_thickness10_2020'
     # data_dir = '/root/Projects/lane_detection/dataset/tusimple/train_set/training_thickness_10-1280x720'
@@ -272,10 +268,6 @@ if __name__ == '__main__':
             time_fit = time.time() - time_fit
 
 
-            '''gpu Mean Shift'''
-            # # fast mean shift
-            # bin_mean_shift = Bin_Mean_Shift()
-            # segmentation = bin_mean_shift.test_forward(pred_bin_batch[0], embeddings[0], mask_threshold=0.1)
 
             # statistics
             # bin_corrects = torch.sum((preds_bin_expand_batch.detach() == labels_bin_expand_batch.detach()).byte())

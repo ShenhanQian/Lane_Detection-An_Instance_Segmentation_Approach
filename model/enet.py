@@ -1,11 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-# @Time    : 2019/5/16 15:22
-# @Author  : Shenhan Qian
-# @Site    : 
-# @File    : enet.py
-# @Software: PyCharm
-
 """Efficient Neural Network"""
 import torch
 import torch.nn as nn

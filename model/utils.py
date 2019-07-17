@@ -156,28 +156,10 @@ def get_color(idx):
 
 
 if __name__ == '__main__':
-
-    num = len(color_set)
-
-    a = 50
-    sq1 = np.zeros((a, a*num, 3), dtype=np.uint8)
-    sq2 = np.zeros((a, a*num, 3), dtype=np.uint8)
-
-    for i, color in enumerate(color_set):
-        cv2.rectangle(sq1, (a*i, 0), (a*i+a-1, a-1), color=color, thickness=-1)
-        cv2.putText(sq1, str(i), (a * i, a//2), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255))
-    cv2.imshow('1', sq1)
-    cv2.waitKey(0)
-
-    # for i, idx in enumerate([10, 3, 4, 8, 12, 16, 7, 2, 0, 9, 13, 19, 11, 6, 5, 14, 18, 15, 17, 1]):
-    #     color = get_color(idx)
-    #     cv2.rectangle(sq2, (a * i, 0), (a * i + a - 1, a - 1), color=color, thickness=-1)
-    #     cv2.putText(sq2, str(i), (a * i, a // 2), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255))
-    #     print(color, end=', ')
+    pass
 
 
-    # cv2.imshow('2', sq2)
-    # cv2.waitKey(0)
+
 
 
 

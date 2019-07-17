@@ -9,13 +9,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import torch.optim as optim
-# from torchvision import transforms
 # from torch.utils.tensorboard import SummaryWriter
 from tensorboardX import SummaryWriter
 
 from model.loss import discriminative_loss
 import model.lanenet as lanenet
-from dataset import TuSimpleDataset_old, TuSimpleDataset
+from dataset import TuSimpleDataset
 
 
 def init_args():
@@ -56,36 +55,10 @@ if __name__ == '__main__':
         print("Let's use CPU")
     print("Batch size: %d" % batch_size)
 
-    # output_dir = '/root/Projects/lane_detection/code/lane-detection-pytorch/output/pred_att_npy-%s-%s' % (train_start_time, args.tag)
-    # if os.path.exists(output_dir) is False:
-    #     os.makedirs(output_dir)
-
-    # data_dir = r'G:\Dataset\tusimple\training_new'
-    # data_dir = '/root/Projects/lane_detection/dataset/tusimple/train_set/training_thickness_10'
-    # data_dir = '/root/Projects/lane_detection/dataset/tusimple/train_set/training_thickness5_2020'
-    # data_dir = '/root/Projects/lane_detection/dataset/tusimple/train_set/training_thickness10_2020'
-    # data_dir = '/root/Projects/lane_detection/dataset/tusimple/train_set/training_thickness_10-1280x720'
-    # data_dir = '/root/Projects/lane_detection/dataset/tusimple/train_set/training_thickness_16'
-    # train_set = TuSimpleDataset_old(os.path.join(data_dir, 'train.txt'))
-    # val_set = TuSimpleDataset_old(os.path.join(data_dir, 'valid.txt'))
-
     data_dir = '/root/Projects/lane_detection/dataset/tusimple/train_set'
     train_set = TuSimpleDataset(data_dir, 'train')
     val_set = TuSimpleDataset(data_dir, 'val')
 
-    # TODO: implement data augmentation using OpenCV
-    # data_transforms = {
-    #     'train': transforms.Compose([
-    #         transforms.RandomResizedCrop(224),
-    #         transforms.RandomHorizontalFlip(),
-    #         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    #     ]),
-    #     'val': transforms.Compose([
-    #         transforms.Resize(256),
-    #         transforms.CenterCrop(224),
-    #         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    #     ]),
-    # }
     num_train = len(train_set)
     num_val = len(val_set)
 
@@ -96,12 +69,12 @@ if __name__ == '__main__':
 
     writer = SummaryWriter(log_dir='summary/lane-detect-%s-%s' % (train_start_time, args.tag))
 
-    # net = lanenet.LaneNet_FCN_Res_1E1D()
+    net = lanenet.LaneNet_FCN_Res_1E1D()
     # net = lanenet.LaneNet_FCN_Res_1E2D()
     # net = lanenet.LaneNet_ENet_1E1D()
     # net = lanenet.LaneNet_ENet_1E2D()
     # net = lanenet.LaneNet_ICNet_1E2D()
-    net = lanenet.LaneNet_ICNet_1E1D()
+    # net = lanenet.LaneNet_ICNet_1E1D()
 
     net = nn.DataParallel(net)
     net.to(device)
@@ -110,8 +83,8 @@ if __name__ == '__main__':
     # for name, param in net.named_parameters():
     #     if param.requires_grad == True:
     #         print("\t", name)
-    # optimizer = optim.SGD(params_to_update, lr=learning_rate, momentum=0.9)  # lr=0.001
-    optimizer = optim.Adam(params_to_update)  #  lr=learning_rate
+    # optimizer = optim.SGD(params_to_update, lr=learning_rate, momentum=0.9)
+    optimizer = optim.Adam(params_to_update)
     MSELoss = nn.MSELoss()
 
     if args.ckpt_path is not None:
@@ -138,7 +111,6 @@ if __name__ == '__main__':
     sum_bin_F1_train, sum_bin_F1_val = 0, 0
 
     '''session'''
-    # torch.save(net.state_dict(), '%s_epoch-%d.pth' % (train_start_time, epoch))
     data_iter = {'train': iter(dataloaders['train']), 'val': iter(dataloaders['val'])}
     for step in range(step, num_steps):
         start_time = time.time()
@@ -213,7 +185,7 @@ if __name__ == '__main__':
         preds_bin_expand = preds_bin.view(preds_bin.shape[0] * preds_bin.shape[1] * preds_bin.shape[2] * preds_bin.shape[3])
         labels_bin_expand = labels_bin.view(labels_bin.shape[0] * labels_bin.shape[1] * labels_bin.shape[2])
 
-        '''Loss weighting determined by label proportion'''
+        '''Floating Loss weighting determined by label proportion'''
         bin_count = torch.bincount(labels_bin_expand)
         bin_prop = bin_count.float() / torch.sum(bin_count)
         weight_bin = torch.tensor(1) / (bin_prop + 0.2)  # max proportion: 5:1
@@ -225,54 +197,26 @@ if __name__ == '__main__':
         # binary segmentation loss
         '''Multi-class CE Loss'''
         CrossEntropyLoss = nn.CrossEntropyLoss(weight=weight_bin)
-        loss_bin = CrossEntropyLoss(logit, labels_bin)  # 1
+        loss_bin = CrossEntropyLoss(logit, labels_bin)
         '''Binary-class CE Loss'''
-        # preds_bin = (logit + 0.5).long().float()
-        # BCELoss = nn.BCELoss()  # weight=weight_bin
-        # loss_bin = BCELoss(logit.view(logit.shape[0], logit.shape[2] * logit.shape[3]),
-        #                    labels_bin.view(labels_bin.shape[0], labels_bin.shape[1] * labels_bin.shape[2]).float())
 
         # discriminative loss
         loss_disc, loss_v, loss_d, loss_r = discriminative_loss(embeddings,
                                                                 labels_inst,
                                                                 delta_v=0.2,
                                                                 delta_d=1,
-                                                                # delta_v=2,
-                                                                # delta_d=10,
-                                                                # delta_v=0.3,  # for 3-dim embedding
-                                                                # delta_d=1,
                                                                 param_var=.5,
                                                                 param_dist=.5,
                                                                 param_reg=0.001)
-                                                                # param_reg=0)
-
-        # loss_bin.detach_()  # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        # loss_bin = torch.tensor(0)
 
         loss = loss_bin + loss_disc * 0.01
-
-        # sklearn mean_shift
-        # for embedding in embeddings:
-        #     embedding_expand = embedding.view(embedding.shape[0],
-        #                                       embedding.shape[1] * embedding.shape[2])
-        #     embedding_expand =torch.transpose(embedding_expand, 1, 0)
-        #     print(embedding_expand.shape)
-        #     clustering = MeanShift(bandwidth=0.5).fit(embedding_expand.cpu().detach().numpy()[:100])
-        #     print(np.unique(clustering.labels_))
-        #     break
-
-        # # fast mean shift
-        # bin_mean_shift = Bin_Mean_Shift()
-        # segmentation = bin_mean_shift.test_forward(preds_bin[0], embeddings[0], mask_threshold=0.1)
 
         # backward + optimize only if in training phase
         if phase == 'train':
             loss.backward()
-            optimizer.step()  # !!!!!!!!!!!!!!!!!!!!!!!!!!
+            optimizer.step()
 
-        # statistics
-        # bin_corrects = torch.sum((preds_bin_expand.detach() == labels_bin_expand.detach()).byte())
-
+        # Statistics
         bin_TP = torch.sum((preds_bin_expand.detach() == labels_bin_expand.detach()) & (preds_bin_expand.detach() == 1))
         bin_precision = bin_TP.double() / (torch.sum(preds_bin_expand.detach() == 1).double() + 1e-6)
         bin_recall = bin_TP.double() / (torch.sum(labels_bin_expand.detach() == 1).double() + 1e-6)
@@ -303,7 +247,6 @@ if __name__ == '__main__':
                           step_time))
 
         elif phase == 'val':
-            # print(preds_bin.shape[0])
             sum_bin_precision_val += bin_precision.detach() * preds_bin.shape[0]
             sum_bin_recall_val += bin_recall.detach() * preds_bin.shape[0]
             sum_bin_F1_val += bin_F1.detach() * preds_bin.shape[0]
@@ -322,11 +265,11 @@ if __name__ == '__main__':
                           loss_disc.item(), loss_v.item(), loss_d.item(), loss_r.item(),
                           step_time))
 
-            '''Visualization'''
+            '''Save images into Tensorflow summary'''
 
-            num_images = 3
+            num_images = 3  # Select the number of images to be saved in each val iteration
 
-            inputs_images = (inputs + VGG_MEAN / 255.)[:num_images, [2, 1, 0], :, :]  # .byte()
+            inputs_images = (inputs + VGG_MEAN / 255.)[:num_images, [2, 1, 0], :, :]
             writer.add_images('image', inputs_images, step)
 
             writer.add_images('Bin Pred', preds_bin[:num_images], step)
@@ -335,12 +278,11 @@ if __name__ == '__main__':
             writer.add_images('Bin Label', labels_bin_img[:num_images], step)
 
             embedding_img = F.normalize(embeddings[:num_images], 1, 1) / 2. + 0.5
-            # print(torch.min(embedding_img).item(), torch.max(embedding_img).item())
             writer.add_images('Embedding', embedding_img, step)
 
-            # select embedding pixel with inst_fg_masks
-            # idx = 0
-            # embedding = embeddings[idx]
+            # # Embeddings can be saved and viewed by tensorboard, but the process is computationally costly
+            # # select embedding pixels with inst_fg_mask
+            # embedding = embeddings[0]
             # c, h, w = embedding.shape
             # inst_fg_mask = labels_inst[idx] != 0  # .to(device)
             # embeddings_fg = torch.transpose(torch.masked_select(embedding, inst_fg_mask).view(c, -1), 0, 1)

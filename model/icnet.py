@@ -1,12 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-# @Time    : 2019/5/16 20:49
-# @Author  : Shenhan Qian
-# @Site    : 
-# @File    : icnet.py
-# @Software: PyCharm
-
-
 """Image Cascade Network"""
 import torch
 import torch.nn as nn
@@ -202,4 +193,3 @@ if __name__ == '__main__':
 
     outputs = model(img)
 
-    print()
