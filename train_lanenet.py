@@ -38,12 +38,12 @@ if __name__ == '__main__':
 
     VGG_MEAN = np.array([103.939, 116.779, 123.68]).astype(np.float32)
     VGG_MEAN = torch.from_numpy(VGG_MEAN).cuda().view([1, 3, 1, 1])
-    batch_size = 16  # 8G: 14       12G: 18     24G:36
+    batch_size = 16  # batch size per GPU
     learning_rate = 1e-3  # 1e-3
     num_steps = 2000000
     num_workers = 4
-    ckpt_epoch_interval = 10
-    val_step_interval = 50  # 50
+    ckpt_epoch_interval = 10  # save a model checkpoint every X epochs
+    val_step_interval = 50  # perform a validation step every X traning steps
     train_start_time = time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime(time.time()))
 
     if torch.cuda.is_available():
@@ -91,9 +91,9 @@ if __name__ == '__main__':
         checkpoint = torch.load(args.ckpt_path)
         net.load_state_dict(checkpoint['model_state_dict'], strict=False)  # , strict=False
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        epoch = checkpoint['epoch']
-        step = checkpoint['step']
-        step = 0
+        #epoch = checkpoint['epoch']
+        #step = checkpoint['step']
+        step = 0  # by default, we reset step and epoch value
         epoch = 1
 
         loss = checkpoint['loss']
@@ -105,7 +105,8 @@ if __name__ == '__main__':
         epoch = 1
 
         print('Network parameters initialized.')
-
+    
+    # accumulators to calculate statistics in each epoch 
     sum_bin_precision_train, sum_bin_precision_val = 0, 0
     sum_bin_recall_train, sum_bin_recall_val = 0, 0
     sum_bin_F1_train, sum_bin_F1_val = 0, 0
@@ -165,7 +166,6 @@ if __name__ == '__main__':
                 sum_bin_recall_val = 0
                 sum_bin_F1_val = 0
 
-        # names = batch['name']
         inputs = batch['input_tensor']
         labels_bin = batch['binary_tensor']
         labels_inst = batch['instance_tensor']
@@ -198,7 +198,6 @@ if __name__ == '__main__':
         '''Multi-class CE Loss'''
         CrossEntropyLoss = nn.CrossEntropyLoss(weight=weight_bin)
         loss_bin = CrossEntropyLoss(logit, labels_bin)
-        '''Binary-class CE Loss'''
 
         # discriminative loss
         loss_disc, loss_v, loss_d, loss_r = discriminative_loss(embeddings,
@@ -277,7 +276,7 @@ if __name__ == '__main__':
             labels_bin_img = labels_bin.view(labels_bin.shape[0], 1, labels_bin.shape[1], labels_bin.shape[2])
             writer.add_images('Bin Label', labels_bin_img[:num_images], step)
 
-            embedding_img = F.normalize(embeddings[:num_images], 1, 1) / 2. + 0.5
+            embedding_img = F.normalize(embeddings[:num_images], 1, 1) / 2. + 0.5  # a tricky way to visualize the embedding
             writer.add_images('Embedding', embedding_img, step)
 
             # # Embeddings can be saved and viewed by tensorboard, but the process is computationally costly

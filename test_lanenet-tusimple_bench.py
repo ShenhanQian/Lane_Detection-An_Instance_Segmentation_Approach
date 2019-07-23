@@ -19,7 +19,10 @@ from dataset import TuSimpleDataset
 def init_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--ckpt_path', type=str, help='path to parameter file (.pth)')
-    parser.add_argument('--tag', type=str, help='training tag')
+    parser.add_argument('--ipm', action='store_true', help='whether to perform Inverse Projective Mapping(IPM) before curve fitting')
+    parser.add_argument('--show', action='store_true', help='whether to show visualization images when testing')
+    parser.add_argument('--save_img', type=bool, default=True, help='whether to save visualization images when testing')
+    parser.add_argument('--tag', type=str, help='tag to log details of experiments')
 
     return parser.parse_args()
 
@@ -50,7 +53,7 @@ if __name__ == '__main__':
         print("Let's use CPU")
     print("Batch size: %d" % batch_size)
 
-    output_dir = '/root/Projects/lane_detection/code/lane-detection-pytorch/output/Test-%s-%s' % (train_start_time, args.tag)
+    output_dir = './output/Test-%s-%s' % (train_start_time, args.tag)
     if os.path.exists(output_dir) is False:
         os.makedirs(output_dir)
 
@@ -81,11 +84,11 @@ if __name__ == '__main__':
                       [0.4 * (w - 1), (h - 1)], [0.60 * (w - 1), (h - 1)]])
     M = cv2.getPerspectiveTransform(src, dst)
     M_inv = cv2.getPerspectiveTransform(dst, src)
-
+    
+    # y_start, y_stop and y_num is calculated according to TuSimple Benchmark's setting
     y_start = np.round(160 * h / 720.)
     y_stop = np.round(710 * h / 720.)
     y_num = 56
-    # y_num = 192
     y_sample = np.linspace(y_start, y_stop, y_num, dtype=np.int16)
     x_sample = np.zeros_like(y_sample, dtype=np.float32) + w // 2
     c_sample = np.ones_like(y_sample, dtype=np.float32)
@@ -167,44 +170,43 @@ if __name__ == '__main__':
                 raw_file = raw_file_batch[idx]
                 pred_inst = pred_insts[idx]
                 path = path_batch[idx]
+                if args.ipm:
+                    '''Fit Curve after IPM(Inverse Perspective Mapping)'''
+                    pred_inst_IPM = cv2.warpPerspective(pred_inst.cpu().numpy().astype('uint8'), M, (w, h),
+                                                        flags=cv2.INTER_NEAREST)
+                    pred_inst_IPM = torch.from_numpy(pred_inst_IPM)
 
-                '''Choice 1: Fit Curve after IPM(Inverse Perspective Mapping)'''
-                # pred_inst_IPM = cv2.warpPerspective(pred_inst.cpu().numpy().astype('uint8'), M, (w, h),
-                #                                     flags=cv2.INTER_NEAREST)
-                # pred_inst_IPM = torch.from_numpy(pred_inst_IPM)
-                #
-                # curves_param = fit_lanes(pred_inst_IPM)
-                # curves_pts_IPM = sample_from_IPMcurve(curves_param, pred_inst_IPM, y_IPM)
-                #
-                # curves_pts_pred = []
-                # for xy_IPM in curves_pts_IPM:  # for each lane in a image
-                #     n, _ = xy_IPM.shape
-                #
-                #     c_IPM = np.ones((n, 1))
-                #     xyc_IPM = np.hstack((xy_IPM, c_IPM))
-                #     xyc_pred = M_inv.dot(xyc_IPM.T).T
-                #
-                #     xy_pred = []
-                #     for pt in xyc_pred:
-                #         x = np.round(pt[0] / pt[2]).astype(np.int32)
-                #         y = np.round(pt[1] / pt[2]).astype(np.int32)
-                #         if 0 <= y < h and 0 <= x < w:  # and pred_inst[y, x]
-                #             xy_pred.append([x,y])
-                #         else:
-                #             xy_pred.append([-2, y])
-                #
-                #     xy_pred = np.array(xy_pred, dtype=np.int32)
-                #     curves_pts_pred.append(xy_pred)
+                    curves_param = fit_lanes(pred_inst_IPM)
+                    curves_pts_IPM = sample_from_IPMcurve(curves_param, pred_inst_IPM, y_IPM)
+                    
+                    curves_pts_pred = []
+                    for xy_IPM in curves_pts_IPM:  # for each lane in a image
+                        n, _ = xy_IPM.shape
+                    
+                        c_IPM = np.ones((n, 1))
+                        xyc_IPM = np.hstack((xy_IPM, c_IPM))
+                        xyc_pred = M_inv.dot(xyc_IPM.T).T
+                    
+                        xy_pred = []
+                        for pt in xyc_pred:
+                            x = np.round(pt[0] / pt[2]).astype(np.int32)
+                            y = np.round(pt[1] / pt[2]).astype(np.int32)
+                            if 0 <= y < h and 0 <= x < w:  # and pred_inst[y, x]
+                                xy_pred.append([x,y])
+                            else:
+                                xy_pred.append([-2, y])
+                    
+                        xy_pred = np.array(xy_pred, dtype=np.int32)
+                        curves_pts_pred.append(xy_pred)
+                else:
+                    '''Directly fit curves on original images'''
+                    curves_param = fit_lanes(pred_inst)
+                    curves_pts_pred=sample_from_curve(curves_param,pred_inst, y_sample)
 
-                '''Choice 2: Directly fit curves on original images'''
-                curves_param = fit_lanes(pred_inst)
-                curves_pts_pred=sample_from_curve(curves_param,pred_inst, y_sample)
-
-                '''visualization'''
+                '''Visualization'''
                 curve_sample = np.zeros((h, w, 3), dtype=np.uint8)
                 rgb = (input_rgb.cpu().numpy().transpose(1, 2, 0) * 255 + VGG_MEAN).astype(np.uint8)
                 pred_bin_rgb = pred_bin_batch[idx].repeat(3,1,1).cpu().numpy().transpose(1, 2, 0).astype(np.uint8) * 255
-                
                 # pred_inst_rgb = pred_inst.repeat(3,1,1).cpu().numpy().transpose(1, 2, 0).astype(np.uint8) * 40  # gray
                 pred_inst_rgb = pred_inst.repeat(3, 1, 1).cpu().numpy().astype(np.uint8).transpose(1, 2, 0)  # color
                 
@@ -223,68 +225,72 @@ if __name__ == '__main__':
                 fg_align = cv2.addWeighted(rgb_fg, 0.3, pred_inst_rgb_fg, 0.7, 0)
                 rgb_align = rgb_bg + fg_align
 
-                # curve_sample_IPM = np.zeros((h, w, 3), dtype=np.uint8)
-                # rgb_IPM = cv2.warpPerspective(rgb, M, (w, h), flags=cv2.INTER_LINEAR)
-                # pred_inst_IPM_rgb = pred_inst_IPM.repeat(3,1,1).cpu().numpy().transpose(1, 2, 0).astype(np.uint8) * 40
+                if args.save_img:
+                    clip, seq, frame = path.split('/')
+                    output_seq_dir = os.path.join(output_dir, seq)
+                    if os.path.exists(output_seq_dir) is False:
+                        os.makedirs(output_seq_dir, exist_ok=True)
 
-                # for front-face view image
-                # for idx, inst in enumerate(curves_pts_pred):
-                #     if inst.ndim == 2:
-                #         index = np.nonzero(inst[:, 0] != -2)
-                #         inst = inst[index]
-                #
-                #         pts = inst.transpose((1, 0))
-                #         curve_sample[pts[1], pts[0]] = (0, 0, 255)
-                #         rgb[pts[1], pts[0]] = (0, 0, 255)
-                #         pred_bin_rgb[pts[1], pts[0]] = (0, 0, 255)
-                #         pred_inst_rgb[pts[1], pts[0]] = (0, 0, 255)
-                #
-                #         cv2.polylines(rgb, [inst.astype(np.int32)], False, (0, 0, 255), 2)
-                #         cv2.polylines(pred_bin_rgb, [inst.astype(np.int32)], False, (0, 0, 255), 2)
-                #         cv2.polylines(pred_inst_rgb, [inst.astype(np.int32)], False, (0, 0, 255), 2)
-
-                # for IPM image
-                # for idx, inst in enumerate(curves_pts_IPM):
-                #
-                #     index = np.nonzero(np.logical_and(0 <= inst[:, 0], inst[:, 0] < w))
-                #     inst = inst[index]
-                #
-                #     pts = inst.transpose((1, 0))
-                #     curve_sample_IPM[pts[1], pts[0]] = (0, 0, 255)
-                #     rgb_IPM[pts[1], pts[0]] = (0, 0, 255)
-                #     pred_inst_IPM_rgb[pts[1], pts[0]] = (0, 0, 255)
-                #
-                #     cv2.polylines(curve_sample_IPM, [inst.astype(np.int32)], False, (0, 0, 255), 2)
-                #     cv2.polylines(rgb_IPM, [inst.astype(np.int32)], False, (0, 0, 255), 2)
-                #     cv2.polylines(pred_inst_IPM_rgb, [inst.astype(np.int32)], False, (0, 0, 255), 2)
-                #
-                # cv2.imshow('input',rgb)
-                # cv2.imshow('bin_pred', pred_bin_rgb)
-                # cv2.imshow('inst_pred', pred_inst_rgb)
-                # cv2.imshow('curve', curve_sample)
-                # cv2.imshow('align', rgb_align)
-
-                #
-                # cv2.imshow('input_IPM', rgb_IPM)
-                # cv2.imshow('inst_pred_IPM', pred_inst_IPM_rgb)
-                # cv2.imshow('curve_IPM', curve_sample_IPM)
-
-                # cv2.waitKey(0)
+                    cv2.imwrite(os.path.join(output_seq_dir, f'{frame}_input.jpg'), rgb)
+                    cv2.imwrite(os.path.join(output_seq_dir, f'{frame}_bin_pred.jpg'), pred_bin_rgb)
+                    cv2.imwrite(os.path.join(output_seq_dir, f'{frame}_inst_pred.jpg'), pred_inst_rgb)
+                    cv2.imwrite(os.path.join(output_seq_dir, f'{frame}_align.jpg'), rgb_align)
 
 
-                clip, seq, frame = path.split('/')
-                output_seq_dir = os.path.join(output_dir, seq)
-                if os.path.exists(output_seq_dir) is False:
-                    os.makedirs(output_seq_dir, exist_ok=True)
+                if args.ipm:
+                    curve_sample_IPM = np.zeros((h, w, 3), dtype=np.uint8)
+                    rgb_IPM = cv2.warpPerspective(rgb, M, (w, h), flags=cv2.INTER_LINEAR)
+                    pred_inst_IPM_rgb = pred_inst_IPM.repeat(3,1,1).cpu().numpy().transpose(1, 2, 0).astype(np.uint8) * 40
 
-                cv2.imwrite(os.path.join(output_seq_dir, f'{frame}_input.jpg'), rgb)
-                cv2.imwrite(os.path.join(output_seq_dir, f'{frame}_bin_pred.jpg'), pred_bin_rgb)
-                cv2.imwrite(os.path.join(output_seq_dir, f'{frame}_inst_pred.jpg'), pred_inst_rgb)
-                cv2.imwrite(os.path.join(output_seq_dir, f'{frame}_align.jpg'), rgb_align)
+                if args.show:
+                    if args.ipm:
+                        '''for IPM image'''
+                        for idx, inst in enumerate(curves_pts_IPM):
+                            m = np.logical_and(0 <= inst[:, 0], inst[:, 0] < w)
+                            m = np.logical_and(m, inst[:, 1] >= y_start)
+                            m = np.logical_and(m, inst[:, 1] <= y_stop)
+                            index = np.nonzero(m)
+                            inst = inst[index]
 
+                            pts = inst.transpose((1, 0))
+                            curve_sample_IPM[pts[1], pts[0]] = (0, 0, 255)
+                            rgb_IPM[pts[1], pts[0]] = (0, 0, 255)
+                            pred_inst_IPM_rgb[pts[1], pts[0]] = (0, 0, 255)
+                        
+                            cv2.polylines(curve_sample_IPM, [inst.astype(np.int32)], False, (0, 0, 255), 2)
+                            cv2.polylines(rgb_IPM, [inst.astype(np.int32)], False, (0, 0, 255), 2)
+                            cv2.polylines(pred_inst_IPM_rgb, [inst.astype(np.int32)], False, (0, 0, 255), 2)
+                        cv2.imshow('input_IPM', rgb_IPM)
+                        cv2.imshow('inst_pred_IPM', pred_inst_IPM_rgb)
+                        cv2.imshow('curve_IPM', curve_sample_IPM)
+
+                    else:
+                        '''for front-face view image'''
+                        for idx, inst in enumerate(curves_pts_pred):
+                            if inst.ndim == 2:
+                                index = np.nonzero(inst[:, 0] != -2)
+                                inst = inst[index]
+                        
+                                pts = inst.transpose((1, 0))
+                                curve_sample[pts[1], pts[0]] = (0, 0, 255)
+                                rgb[pts[1], pts[0]] = (0, 0, 255)
+                                pred_bin_rgb[pts[1], pts[0]] = (0, 0, 255)
+                                pred_inst_rgb[pts[1], pts[0]] = (0, 0, 255)
+                        
+                                cv2.polylines(rgb, [inst.astype(np.int32)], False, (0, 0, 255), 2)
+                                cv2.polylines(pred_bin_rgb, [inst.astype(np.int32)], False, (0, 0, 255), 2)
+                                cv2.polylines(pred_inst_rgb, [inst.astype(np.int32)], False, (0, 0, 255), 2)
+                        
+                        cv2.imshow('inst_pred', pred_inst_rgb)
+                        cv2.imshow('curve', curve_sample)
+                        cv2.imshow('align', rgb_align)
+                        # cv2.imshow('input',rgb)
+                        # cv2.imshow('bin_pred', pred_bin_rgb)
+
+                    cv2.waitKey(0)  # wait forever until a key stroke
+                    # cv2.waitKey(1)  # wait for 1ms
 
                 time_fit = time.time() - time_fit
-
                 time_run = time.time() - time_run
 
                 # Generate Json file to be evaluated by TuSimple Benchmark official eval script
@@ -297,8 +303,7 @@ if __name__ == '__main__':
                 time_fit_avg = (time_ct * time_fit_avg + time_fit) / (time_ct + 1)
                 time_ct += 1
 
-                if step % 10 == 0:  # Change the coefficient to filter the value
-                # if step % 2 == 0:
+                if step % 50 == 0:  # Change the coefficient to filter the value
                     time_ct = 0
 
 

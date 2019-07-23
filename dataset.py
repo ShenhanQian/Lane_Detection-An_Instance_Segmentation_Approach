@@ -64,7 +64,7 @@ class TuSimpleDataset(Dataset):
                 self.image_list = [json.loads(line)['raw_file'] for line in open(task_file).readlines()]
             except BaseException:
                 raise Exception(f'Fail to load {task_file}.')
-        elif phase == 'test_extend':
+        elif phase == 'test_extend':  # to load extra frames which haave no lane annotation
             task_file = os.path.join(dataset_dir, 'test_tasks_0627.json')
             try:
                 self.image_list = []
