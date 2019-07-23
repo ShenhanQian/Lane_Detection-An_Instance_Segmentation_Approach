@@ -1,0 +1,5 @@
+ujson
+tensorboardX
+scikit-learn
+opencv-python
+torch

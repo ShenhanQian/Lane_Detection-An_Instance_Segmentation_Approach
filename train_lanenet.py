@@ -9,8 +9,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import torch.optim as optim
-# from torch.utils.tensorboard import SummaryWriter
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
+# from tensorboardX import SummaryWriter
 
 from model.loss import discriminative_loss
 import model.lanenet as lanenet
@@ -19,7 +19,10 @@ from dataset import TuSimpleDataset
 
 def init_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--data_dir', type=str, help='path to TuSimple Benchmark dataset')
     parser.add_argument('--ckpt_path', type=str, help='path to parameter file (.pth)')
+    parser.add_argument('--arch', type=str, default='fcn', help='network architecture type(default: FCN)')
+    parser.add_argument('--dual_decoder', action='store_true', help='use seperate decoders for two branches')
     parser.add_argument('--tag', type=str, help='training tag')
 
     return parser.parse_args()
@@ -55,7 +58,7 @@ if __name__ == '__main__':
         print("Let's use CPU")
     print("Batch size: %d" % batch_size)
 
-    data_dir = '/root/Projects/lane_detection/dataset/tusimple/train_set'
+    data_dir = args.data_dir
     train_set = TuSimpleDataset(data_dir, 'train')
     val_set = TuSimpleDataset(data_dir, 'val')
 
@@ -69,7 +72,20 @@ if __name__ == '__main__':
 
     writer = SummaryWriter(log_dir='summary/lane-detect-%s-%s' % (train_start_time, args.tag))
 
-    net = lanenet.LaneNet_FCN_Res_1E1D()
+    # select NN architecture
+    arch = args.arch
+    if 'fcn' in arch.lower():
+        arch = 'lanenet.LaneNet_FCN_Res'
+    elif 'enet' in arch.lower():
+        arch = 'lanenet.LaneNet_ENet'
+    elif 'icnet' in arch.lower():
+        arch = 'lanenet.LaneNet_ICNet'
+    
+    arch = arch + '_1E2D' if args.dual_decoder else arch + '_1E1D'
+    print('Architecture:', arch)
+    net = eval(arch)()
+    
+    # net = lanenet.LaneNet_FCN_Res_1E1D()
     # net = lanenet.LaneNet_FCN_Res_1E2D()
     # net = lanenet.LaneNet_ENet_1E1D()
     # net = lanenet.LaneNet_ENet_1E2D()
