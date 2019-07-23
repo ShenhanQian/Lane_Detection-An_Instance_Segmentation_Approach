@@ -4,16 +4,12 @@
 
 This is a PyTorch implementation and variation of the paper [《Towards End-to-End Lane Detection: An Instance Segmentation Approach》](https://arxiv.org/abs/1802.05591).
 
-Data division
-Architecture
-IPM
-
 ## Basic Results
 
 ### Results on TuSimple Benchmark val
 |Arch|Input Size|Accuracy|Details|
 |-|-|-|-|
-|||||
+| | | | |
 
 **Note:**
 - Input size is 512*288
@@ -78,4 +74,4 @@ python train_lanenet.py \
 
 ## TODO
 - integrate TuSimple Bencnmark eval script with the test script
-
+- Discuss about IPM, dataset division.
