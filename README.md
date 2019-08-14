@@ -8,13 +8,18 @@ This is a PyTorch implementation and variation of the paper [《Towards End-to-E
 
 ## Basic Results
 
-### Results on TuSimple Benchmark val
-|Arch|Input Size|Accuracy|Details|
-|-|-|-|-|
-| | | | |
+### Results on TuSimple Benchmark test set
+|Architecture|Accuracy|FP|FN|FPS|
+|-|-|-|-|-|
+|FCN-Res18 |0.940|0.142|0.085|15.6|
+|FCN-Res34 |0.941|0.133|0.083|14.6|
+|ENet |0.937|0.149|0.093|10.8|
+|ICNet |0.935|0.139|0.103|11.1|
 
 **Note:**
-- Input size is 512*288
+- The model was trained using only TuSimple dataset, without data augmentation, the size of input images is 512*288.
+- Training and testing were performed on an computer cluster with Intel Xeon CPUs(E5-2690 v4 @ 2.60GHz) and NVIDIA Titan V GPUs.
+
 
 ## Quick Start
 ### Preparation
