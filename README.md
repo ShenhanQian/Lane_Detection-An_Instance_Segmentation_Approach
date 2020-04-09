@@ -42,7 +42,7 @@ This is a PyTorch implementation and variation of the paper [《Towards End-to-E
             `-- ...
    ```
 
-3. Download checkpoint pth files from our [LaneNet model zoo](https://shanghaitecheducn-my.sharepoint.com/:f:/g/personal/qianshh_shanghaitech_edu_cn/ElU__fWwiZ1DtwlhKN0hfKUBqfmqkWep3Ey93pZ7y74TIQ?e=9kR88z).
+3. Download checkpoint pth files from our LaneNet model zoo. ([onedrive](https://shanghaitecheducn-my.sharepoint.com/:f:/g/personal/qianshh_shanghaitech_edu_cn/ElU__fWwiZ1DtwlhKN0hfKUBqfmqkWep3Ey93pZ7y74TIQ?e=9kR88z) / [百度网盘](https://pan.baidu.com/s/4jMDs86a))
 
 ### Training and Testing
 #### Testing on TuSimple Benchmark
