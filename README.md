@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This is a PyTorch implementation and variation of the paper [《Towards End-to-End Lane Detection: An Instance Segmentation Approach》](https://arxiv.org/abs/1802.05591).
+This is a PyTorch implementation and variation of the paper ["Towards End-to-End Lane Detection: An Instance Segmentation Approach"](https://arxiv.org/abs/1802.05591).
 
 ![alt text](images/lane-detection.gif "lane-detection")
 
